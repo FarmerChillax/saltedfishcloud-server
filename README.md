@@ -30,8 +30,26 @@
 
 如果长时间未得到我的回复，可能是我刚好比较忙或忘了回复，可以试着给我发邮件。
 
-## 快速开始    
+## 通过 docker 快速启动项目
+详见仓库: https://github.com/FarmerChillax/saltedfishcloud
 
+1. 找一个合适的地方，克隆新项目
+```shell
+$ git clone https://github.com/FarmerChillax/saltedfishcloud.git
+```
+2. 进入到项目根目录
+
+```shell
+$ cd saltedfishcloud
+```
+
+3. 执行以下命令
+```shell
+$ docker-compose up -d
+```
+
+
+## 快速手动部署    
 ### 0. 打包与编译
 对根项目执行maven的package，执行成功后会在release目录下创建程序主程序jar包和相关文件
 
@@ -69,3 +87,10 @@ java -jar sfc-core.jar --spring.config.import=file:config.yml
 | demo | 没啥用，就是个demo，添加/ext/img和/ext/hello两个测试路由 |
 | hadoop-store | 提供hdfs文件系统读写支持                          |
 | minio-store | 提供minio对象存储系统读写支持                       |
+
+
+## 贡献指南
+
+### 通过 docker 快速构建开发环境
+
+项目根目录下运行 `docker-compose up -d`
