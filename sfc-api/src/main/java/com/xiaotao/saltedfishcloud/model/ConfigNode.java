@@ -2,13 +2,34 @@ package com.xiaotao.saltedfishcloud.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 
 import java.util.List;
+import java.util.Map;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Accessors(chain = true)
 public class ConfigNode {
+
+    /**
+     * 快捷创建一个name-value节点
+     * @param nameAndTitle  id名称与标题
+     * @param value         值
+     */
+    public ConfigNode(String nameAndTitle, Object value) {
+        this.name = nameAndTitle;
+        this.title = nameAndTitle;
+        this.value = value;
+    }
+
     /**
      * 配置节点
      */
@@ -32,7 +53,7 @@ public class ConfigNode {
     /**
      * 配置值
      */
-    private String value;
+    private Object value;
 
     /**
      * 被修改前的原值
@@ -48,6 +69,11 @@ public class ConfigNode {
      * 描述
      */
     private String describe;
+
+    /**
+     * 排序
+     */
+    private long sort = 0;
 
     /**
      * 是否只读
@@ -94,4 +120,25 @@ public class ConfigNode {
      * 是否在菜单中隐藏
      */
     private boolean hide;
+
+    /**
+     * 是否必填
+     */
+    private boolean required;
+
+    /**
+     * 额外参数，当类型为模板时会传递给模板
+     */
+    private Map<String, Object> params;
+
+    /**
+     * 是否独占一行
+     */
+    private Boolean isRow;
+
+    public ConfigNode useTemplate(String template) {
+        this.setInputType("template");
+        this.setTemplate(template);
+        return this;
+    }
 }

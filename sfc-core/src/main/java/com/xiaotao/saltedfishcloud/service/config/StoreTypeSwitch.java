@@ -3,12 +3,13 @@ package com.xiaotao.saltedfishcloud.service.config;
 import com.xiaotao.saltedfishcloud.dao.mybatis.UserDao;
 import com.xiaotao.saltedfishcloud.model.po.User;
 import com.xiaotao.saltedfishcloud.model.po.file.FileInfo;
-import com.xiaotao.saltedfishcloud.enums.StoreMode;
+import com.sfc.enums.StoreMode;
 import com.xiaotao.saltedfishcloud.service.file.DiskFileSystem;
 import com.xiaotao.saltedfishcloud.service.file.DiskFileSystemManager;
 import com.xiaotao.saltedfishcloud.service.file.StoreService;
 import com.xiaotao.saltedfishcloud.service.file.StoreServiceFactory;
 import com.xiaotao.saltedfishcloud.service.file.impl.filesystem.DefaultFileSystem;
+import com.xiaotao.saltedfishcloud.service.file.impl.filesystem.DiskFileSystemDispatcher;
 import com.xiaotao.saltedfishcloud.utils.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 存储类型切换器
+ * todo 切换前备份数据
+ */
 @Component
 @Slf4j
 public class StoreTypeSwitch {
@@ -37,7 +42,7 @@ public class StoreTypeSwitch {
 //        throw new UnsupportedOperationException("未开发完成");
         final DiskFileSystem fileSystem = fileService.getMainFileSystem();
 
-        if (!(fileSystem instanceof DefaultFileSystem)) {
+        if (!(fileSystem instanceof DefaultFileSystem) && !(fileSystem instanceof DiskFileSystemDispatcher)) {
             throw new UnsupportedOperationException("当前文件系统或存储服务不支持切换");
         }
 

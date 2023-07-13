@@ -1,0 +1,228 @@
+[
+  {
+    "name": "common",
+    "title": "基础配置",
+    "nodes": [
+      {
+        "name": "注册配置",
+        "area": "sys.register",
+        "nodes": [
+          {
+            "name": "sys.register.reg_code",
+            "inputType": "text",
+            "title": "注册邀请码",
+            "defaultValue": "114514",
+            "describe": "当开启“邀请码注册”时，游客注册账号所需的邀请码"
+          },
+          {
+            "name": "sys.register.enable_email_reg",
+            "inputType": "switch",
+            "title": "启用邮箱注册",
+            "describe": "允许使用邮箱注册",
+            "defaultValue": false
+          },
+          {
+            "name": "sys.register.enable_reg_code",
+            "inputType": "switch",
+            "title": "启用邀请码注册",
+            "describe": "允许使用邀请码注册",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "name": "存储配置",
+        "area": "sys.store",
+        "nodes": [
+          {
+            "name": "sys.store.mode",
+            "title": "存储模式",
+            "defaultValue": "UNIQUE",
+            "describe": "系统基础存储系统的数据组织方式。\nRAW为原始存储，在目标存储系统上的文件结构与用户网盘的文件结构保持一致。\nUNIQUE为唯一存储，按文件哈希值统一组织文件，相同文件只会存储一份",
+            "inputType": "select",
+            "options": [
+              {
+                "title": "RAW",
+                "value": "RAW"
+              },
+              {
+                "title": "UNIQUE",
+                "value": "UNIQUE"
+              }
+            ]
+          },
+          {
+            "name": "sys.store.sync_interval",
+            "inputType": "text",
+            "title": "自动同步间隔(该功能已暂时弃用)",
+            "describe": "文件记录服务与存储服务文件信息自动执行同步的间隔。\n单位：分钟，-1关闭",
+            "defaultValue": "-1"
+          }
+        ]
+      },
+      {
+        "title": "常规",
+        "name": "general",
+        "nodes": [
+          {
+            "name": "sys.common.version",
+            "title": "系统版本",
+            "describe": "当前系统的主版本号",
+            "defaultValue": "1.0.0.0-SNAPSHOT",
+            "readonly": true,
+            "inputType": "text"
+          },
+          {
+            "name": "sys.common.mail_properties",
+            "title": "发信服务器配置",
+            "describe": "系统发送邮件时连接的发信服务器配置",
+            "defaultValue": "",
+            "inputType": "form",
+            "typeRef": "com.xiaotao.saltedfishcloud.service.mail.MailProperties"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "user-manager",
+    "title": "用户管理",
+    "nodes": [
+      {
+        "nodes": [
+          {
+            "name": "user-manager",
+            "title": "用户管理",
+            "inputType": "template",
+            "template": "user-manager",
+            "defaultValue": ""
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "proxy-node",
+    "title": "代理节点",
+    "nodes": [
+      {
+        "name": "",
+        "title": "",
+        "nodes": [
+          {
+            "name": "proxy",
+            "title": "代理配置",
+            "describe": "代理节点配置可用于离线下载",
+            "defaultValue": "",
+            "inputType": "template",
+            "template": "proxy-config"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "desktop",
+    "title": "桌面设置",
+    "nodes": [
+      {
+        "name": "",
+        "value": "",
+        "nodes": [
+          {
+            "name": "desktop-config",
+            "title": "公共桌面配置",
+            "describe": "配置公共的首页桌面小组件",
+            "defaultValue": "",
+            "inputType": "template",
+            "hide": true,
+            "template": "desktop-config-list"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "style",
+    "title": "样式与主题",
+    "nodes": [
+      {
+        "name": "sys.bg",
+        "title": "背景图设置",
+        "value": "",
+        "nodes": [
+          {
+            "name": "sys.bg.main",
+            "title": "主背景图",
+            "describe": "默认的背景底图",
+            "defaultValue": "{}",
+            "value": "{}",
+            "inputType": "template",
+            "template": "bg-option-editor",
+            "params": {
+              "useJson": true
+            },
+            "typeRef": "com.xiaotao.saltedfishcloud.model.BgOption"
+          }
+        ]
+      },
+      {
+        "name": "sys.theme",
+        "title": "主题",
+        "nodes": [
+          {
+            "name": "sys.theme.dark",
+            "title": "默认黑暗模式",
+            "inputType": "switch",
+            "defaultValue": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "plugin",
+    "title": "插件管理",
+    "nodes": [
+      {
+        "nodes": [
+          {
+            "name": "plugin-manager",
+            "title": "插件管理",
+            "describe": "对系统插件信息进行管理，注意：执行删除或安装新插件需要重启咸鱼云服务后生效",
+            "inputType": "template",
+            "template": "plugin-manager",
+            "defaultValue": ""
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "safe",
+    "title": "安全",
+    "nodes": [
+      {
+        "name": "常规",
+        "value": "general",
+        "nodes": [
+          {
+            "name": "sys.safe.allow_anonymous_comments",
+            "title": "匿名留言",
+            "describe": "允许匿名留言",
+            "defaultValue": false,
+            "inputType": "switch"
+          },
+          {
+            "name": "sys.safe.token",
+            "title": "系统安全密钥",
+            "describe": "系统的安全密钥，修改后会导致所有用户登录失效、直链失效",
+            "defaultValue": "",
+            "inputType": "text",
+            "hide": true
+          }
+        ]
+      }
+    ]
+  }
+]

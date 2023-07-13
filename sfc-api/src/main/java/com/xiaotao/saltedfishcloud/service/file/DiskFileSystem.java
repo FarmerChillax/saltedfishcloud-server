@@ -1,22 +1,16 @@
 package com.xiaotao.saltedfishcloud.service.file;
 
-import com.xiaotao.saltedfishcloud.model.po.file.BasicFileInfo;
-import com.xiaotao.saltedfishcloud.model.po.file.FileDCInfo;
-import com.xiaotao.saltedfishcloud.model.po.file.FileInfo;
-import com.xiaotao.saltedfishcloud.enums.ArchiveType;
 import com.xiaotao.saltedfishcloud.exception.JsonException;
-import com.xiaotao.saltedfishcloud.helper.PathBuilder;
-import com.xiaotao.saltedfishcloud.utils.JwtUtils;
-import com.xiaotao.saltedfishcloud.utils.MapperHolder;
+import com.xiaotao.saltedfishcloud.model.FileSystemStatus;
+import com.xiaotao.saltedfishcloud.model.po.file.FileInfo;
 import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 
@@ -53,44 +47,12 @@ public interface DiskFileSystem {
     boolean quickSave(int uid, String path, String name, String md5) throws IOException;
 
     /**
-     * 创建压缩文件并直接输出到输出流中，可用于多文件打包下载
-     * @TODO 实现异步执行和通知机制
-     * @param uid           用户ID
-     * @param path          被打包压缩的文件所在路径
-     * @param names         被压缩的文件名
-     * @param type          压缩类型
-     * @param outputStream  接收压缩数据的输出流
-     */
-    void compressAndWriteOut(int uid, String path, Collection<String> names, ArchiveType type, OutputStream outputStream)
-            throws IOException;
-
-    /**
-     * 创建一个压缩文件
-     * @TODO 实现异步执行和通知机制
-     * @param uid   用户ID
-     * @param path  输入的文件所在的网盘目录
-     * @param names 要被压缩的文件名集合
-     * @param dest  输出文件网盘路径
-     * @param type  压缩类型
-     */
-    void compress(int uid, String path, Collection<String> names, String dest, ArchiveType type) throws IOException;
-
-    /**
-     * 解压一个压缩包到指定目录下
-     * @TODO 实现异步执行和通知机制
-     * @param uid   用户ID
-     * @param path  压缩包所在路径
-     * @param name  压缩包名称
-     * @param dest  解压目的地
-     */
-    void extractArchive(int uid, String path, String name, String dest) throws IOException;
-    /**
      * 判断给定的路径是否存在
      * @param uid   用户ID
      * @param path  要判断的文件路径
      * @return      结果，存在则返回true，否则为false
      */
-    boolean exist(int uid, String path);
+    boolean exist(int uid, String path) throws IOException;
 
     /**
      * 从文件系统获取文件资源
@@ -101,6 +63,14 @@ public interface DiskFileSystem {
      */
     Resource getResource(int uid, String path,String name) throws IOException;
 
+    /**
+     * 获取对应文件资源的缩略图
+     * @param uid       用户id
+     * @param path      文件路径
+     * @param name      文件名称
+     * @return          缩略图资源，若不支持或无法获取则为null
+     */
+    Resource getThumbnail(int uid, String path, String name) throws IOException;
 
     /**
      * 在网盘中连同所有父级目录，创建一个目录
@@ -179,8 +149,8 @@ public interface DiskFileSystem {
 
     /**
      * 通过移动本地文件的方式存储文件
-     * @TODO 编写默认实现
-     * @TODO fileInfo改为filename
+     * todo 编写默认实现
+     * todo fileInfo改为filename
      * @param uid               用户ID
      * @param nativeFilePath    本地文件路径
      * @param path              网盘路径
@@ -197,7 +167,7 @@ public interface DiskFileSystem {
      * @param fileInfo    文件信息
      * @throws IOException 文件写入失败时抛出
      */
-    int saveFile(int uid,
+    long saveFile(int uid,
                  InputStream stream,
                  String path,
                  FileInfo fileInfo) throws IOException;
@@ -208,10 +178,13 @@ public interface DiskFileSystem {
      * @param file        接收到的文件对象
      * @param requestPath 请求的文件路径
      * @param md5         请求时传入的文件md5
-     * @return 新文件 - 1，旧文件覆盖 - 0，常量见{@link DiskFileSystem#SAVE_COVER}和{@link DiskFileSystem#SAVE_NEW_FILE}
+     * @return 新文件 - 1，旧文件覆盖 - 0，文件无变更 - 2
+     * 常量见{@link DiskFileSystem#SAVE_COVER}、
+     * {@link DiskFileSystem#SAVE_NEW_FILE}、
+     * {@link DiskFileSystem#SAVE_NOT_CHANGE}
      * @throws IOException 文件写入失败时抛出
      */
-    int saveFile(int uid,
+    long saveFile(int uid,
                  MultipartFile file,
                  String requestPath,
                  String md5) throws IOException;
@@ -246,26 +219,9 @@ public interface DiskFileSystem {
     void rename(int uid, String path, String name, String newName) throws IOException;
 
     /**
-     * 获取网盘中文件的下载码
-     * @param uid 用户ID
-     * @param path 文件所在网盘目录
-     * @param fileInfo 文件信息
-     * @param expr  下载码有效时长（单位：天），若小于0，则无限制
+     * 获取文件系统状态
      */
-    @SuppressWarnings("all")
-    default String getFileDC(int uid, String path, BasicFileInfo fileInfo, int expr) throws IOException {
-        if (
-                !exist(uid, PathBuilder.formatPath(path + "/" + fileInfo.getName(), true))
-                || getResource(uid, path, fileInfo.getName()) == null
-        ) {
-            throw new JsonException(404, "文件不存在");
-        }
-        FileDCInfo info = new FileDCInfo();
-        info.setDir(path);
-        info.setMd5(fileInfo.getMd5());
-        info.setName(fileInfo.getName());
-        info.setUid(uid);
-        String token = JwtUtils.generateToken(MapperHolder.mapper.writeValueAsString(info), expr < 0 ? expr : expr*60*60*24);
-        return token;
+    default List<FileSystemStatus> getStatus() {
+        return Collections.emptyList();
     }
 }

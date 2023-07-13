@@ -1,6 +1,10 @@
 package com.xiaotao.saltedfishcloud.service.file.impl.filesystem;
 
-import com.xiaotao.saltedfishcloud.enums.ArchiveType;
+import com.sfc.constant.error.FileSystemError;
+import com.xiaotao.saltedfishcloud.config.SysProperties;
+import com.xiaotao.saltedfishcloud.exception.FileSystemParameterException;
+import com.xiaotao.saltedfishcloud.exception.JsonException;
+import com.xiaotao.saltedfishcloud.model.FileSystemStatus;
 import com.xiaotao.saltedfishcloud.model.po.MountPoint;
 import com.xiaotao.saltedfishcloud.model.po.file.BasicFileInfo;
 import com.xiaotao.saltedfishcloud.model.po.file.FileInfo;
@@ -9,24 +13,44 @@ import com.xiaotao.saltedfishcloud.service.file.DiskFileSystemManager;
 import com.xiaotao.saltedfishcloud.service.mountpoint.MountPointService;
 import com.xiaotao.saltedfishcloud.utils.MapperHolder;
 import com.xiaotao.saltedfishcloud.utils.StringUtils;
-import lombok.Data;
+import com.xiaotao.saltedfishcloud.validator.FileNameValidator;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * 文件系统匹配结果
+ */
 class FileSystemMatchResult {
+    /**
+     * 匹配到的文件系统
+     */
     DiskFileSystem fileSystem;
+
+    /**
+     * 在对应的文件系统上解析后的对应路径（原始请求路径）
+     */
     String resolvedPath;
 
-    public FileSystemMatchResult(DiskFileSystem fileSystem, String resolvedPath) {
+    /**
+     * 匹配到的挂载点，若没匹配到则为null
+     */
+    MountPoint mountPoint;
+
+    public FileSystemMatchResult(DiskFileSystem fileSystem,MountPoint mountPoint, String resolvedPath) {
         this.fileSystem = fileSystem;
+        this.mountPoint = mountPoint;
         this.resolvedPath = resolvedPath;
     }
 
@@ -37,58 +61,116 @@ class FileSystemMatchResult {
                 ", resolvedPath='" + resolvedPath + '\'' +
                 '}';
     }
+
+    /**
+     * 判断请求的路径是否为匹配的挂载点本身
+     */
+    public boolean isMountPath(String path) {
+        if (mountPoint == null) {
+            return false;
+        }
+        return StringUtils.isPathEqual(path, mountPoint.getPath());
+    }
 }
 
 /**
  * 特殊的文件系统，文件系统指派器，根据请求的路径指派相对应的文件系统类型来执行相关请求，为实现第三方文件系统挂载点功能提供支持。
  */
-@Data
 @Slf4j
+@Component
 public class DiskFileSystemDispatcher implements DiskFileSystem {
     private final static String LOG_PREFIX = "[FileSystemDispatcher]";
+
+    @Getter
     private DiskFileSystem mainFileSystem;
+
+    @Autowired
     private MountPointService mountPointService;
+
+    @Autowired
     private DiskFileSystemManager diskFileSystemManager;
 
-    /**
-     * 构造一个指派器
-     * @param mainFileSystem        主文件系统
-     * @param mountPointService     挂载点服务
-     * @param diskFileSystemManager 文件系统管理器
-     */
-    public DiskFileSystemDispatcher(DiskFileSystem mainFileSystem, MountPointService mountPointService, DiskFileSystemManager diskFileSystemManager) {
+    @Autowired
+    private RedissonClient redisson;
+
+    @Autowired
+    private SysProperties sysProperties;
+
+
+    public void setMainFileSystem(DiskFileSystem mainFileSystem) {
+        if (this.mainFileSystem != null) {
+            throw new IllegalArgumentException("已经设置了主文件系统:" + mainFileSystem.getClass());
+        }
         this.mainFileSystem = mainFileSystem;
-        this.mountPointService = mountPointService;
-        this.diskFileSystemManager = diskFileSystemManager;
     }
 
+    @Override
+    public Resource getThumbnail(int uid, String path, String name) throws IOException {
+        FileSystemMatchResult fileSystemMatchResult = matchFileSystem(uid, path);
+        return fileSystemMatchResult.fileSystem.getThumbnail(uid, fileSystemMatchResult.resolvedPath, name);
+    }
+
+    /**
+     * 根据给定的uid和请求路径，匹配所处的挂载点路径
+     * @param uid   用户id
+     * @param path  请求路径
+     * @return      若匹配到挂载点，则返回，否则为null
+     */
     protected MountPoint matchMountPoint(int uid, String path) {
         Map<String, MountPoint> mountPointMap = mountPointService.findMountPointPathByUid(uid);
+        String name = StringUtils.getURLLastName(path);
+        if (name == null) {
+            return null;
+        }
+        // 路径后面添加一个/，防止出现因为部分前缀匹配导致的误判，如：当访问 /挂载点12 时候,若存在 /挂载点1，则会误匹配到/挂载点1
+        String path2 = path + "/";
+        // 遍历所有挂载点，匹配所处路径前缀相同且名称相同的
         return mountPointMap.entrySet().stream()
-                .filter(e -> path.startsWith(e.getKey()))
+                .filter(e -> path2.startsWith(e.getKey()))
                 .findAny()
                 .map(Map.Entry::getValue)
                 .orElse(null);
     }
 
+    /**
+     * 根据请求的路径匹配对应的文件系统
+     * @param uid   用户id
+     * @param path  请求的路径
+     * @return      匹配结果
+     */
     protected FileSystemMatchResult matchFileSystem(int uid, String path) {
         MountPoint mountPoint = matchMountPoint(uid, path);
         if (mountPoint == null) {
-            return new FileSystemMatchResult(mainFileSystem, path);
+            return new FileSystemMatchResult(mainFileSystem, mountPoint, path);
         } else {
             try {
                 Map<String, Object> map = MapperHolder.parseJsonToMap(mountPoint.getParams());
                 DiskFileSystem fileSystem = diskFileSystemManager.getFileSystem(mountPoint.getProtocol(), map);
-                return new FileSystemMatchResult(fileSystem, resolvePath(mountPoint.getPath(), path));
+                return new FileSystemMatchResult(fileSystem,mountPoint ,resolvePath(mountPoint.getPath(), path));
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }
     }
 
-
+    /**
+     * 将请求路径解析为目标挂载点的相对路径
+     * @param mountPath     挂载点的挂载路径
+     * @param requestPath   请求路径
+     * @return              挂载点下的相对路径
+     */
     protected String resolvePath(String mountPath, String requestPath) {
-        return requestPath.substring(mountPath.length() - 1);
+        int prefixLength;
+        if (mountPath.endsWith("/")) {
+            prefixLength = mountPath.length() - 1;
+        } else {
+            prefixLength = mountPath.length();
+        }
+        if (requestPath.startsWith("/")) {
+            return requestPath.substring(prefixLength);
+        } else {
+            return StringUtils.appendPath("/", requestPath.substring(prefixLength));
+        }
     }
 
     @Override
@@ -97,38 +179,27 @@ public class DiskFileSystemDispatcher implements DiskFileSystem {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void saveAvatar(int uid, Resource resource) throws IOException {
         mainFileSystem.saveAvatar(uid, resource);
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean quickSave(int uid, String path, String name, String md5) throws IOException {
         FileSystemMatchResult matchResult = matchFileSystem(uid, path);
         return matchResult.fileSystem.quickSave(uid, matchResult.resolvedPath, name, md5);
     }
 
     @Override
-    public void compressAndWriteOut(int uid, String path, Collection<String> names, ArchiveType type, OutputStream outputStream) throws IOException {
+    public boolean exist(int uid, String path) throws IOException {
         FileSystemMatchResult matchResult = matchFileSystem(uid, path);
-        matchResult.fileSystem.compressAndWriteOut(uid, matchResult.resolvedPath, names, type, outputStream);
-    }
+        if (matchResult.mountPoint != null && (matchResult.resolvedPath.equals("/") || matchResult.resolvedPath.equals(""))) {
+            return true;
+        } else {
+            return matchResult.fileSystem.exist(uid, matchResult.resolvedPath);
+        }
 
-    @Override
-    public void compress(int uid, String path, Collection<String> names, String dest, ArchiveType type) throws IOException {
-        FileSystemMatchResult matchResult = matchFileSystem(uid, path);
-        matchResult.fileSystem.compress(uid, matchResult.resolvedPath, names, dest, type);
-    }
-
-    @Override
-    public void extractArchive(int uid, String path, String name, String dest) throws IOException {
-        FileSystemMatchResult matchResult = matchFileSystem(uid, path);
-        matchResult.fileSystem.extractArchive(uid, matchResult.resolvedPath, name, dest);
-    }
-
-    @Override
-    public boolean exist(int uid, String path) {
-        FileSystemMatchResult matchResult = matchFileSystem(uid, path);
-        return matchResult.fileSystem.exist(uid, matchResult.resolvedPath);
     }
 
     @Override
@@ -138,8 +209,12 @@ public class DiskFileSystemDispatcher implements DiskFileSystem {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public String mkdirs(int uid, String path) throws IOException {
         FileSystemMatchResult matchResult = matchFileSystem(uid, path);
+        if (matchResult.isMountPath(path)) {
+            throw new JsonException(FileSystemError.MOUNT_POINT_EXIST);
+        }
         return matchResult.fileSystem.mkdirs(uid, matchResult.resolvedPath);
     }
 
@@ -174,7 +249,7 @@ public class DiskFileSystemDispatcher implements DiskFileSystem {
                     .filter(e -> e.getName().equals(sourceName))
                     .findAny()
                     .orElseThrow(() -> new IOException(source + "/" + sourceName + " 不存在"));
-
+            fileInfo.setStreamSource(sourceResource);
             targetMatchResult.fileSystem.saveFile(targetUid, sourceResource.getInputStream(), targetMatchResult.resolvedPath, fileInfo);
             return;
         }
@@ -189,6 +264,9 @@ public class DiskFileSystemDispatcher implements DiskFileSystem {
         if (fileList != null) {
             for (FileInfo fileInfo : fileList) {
                 Resource resource = sourceMatchResult.fileSystem.getResource(uid, resolvedSourcePath, fileInfo.getName());
+                if (targetMatchResult.fileSystem == mainFileSystem) {
+                    fileInfo.setStreamSource(resource);
+                }
                 try(InputStream inputStream = resource.getInputStream()) {
                     targetMatchResult.fileSystem.saveFile(targetUid, inputStream, resolvedTargetPath, fileInfo);
                 }
@@ -216,7 +294,12 @@ public class DiskFileSystemDispatcher implements DiskFileSystem {
                 existFile = Collections.emptySet();
             }
 
+            int nextDepth = depth + 1;
             for (FileInfo fileInfo : dirList) {
+                // 跳过挂载点
+                if (fileInfo.isMount()) {
+                    continue;
+                }
                 if (!existDir.contains(fileInfo.getName())) {
                     if (existFile.contains(fileInfo.getName())) {
                         log.warn("{}复制目标路径已存在同名文件：{}/{}", LOG_PREFIX, resolvedTargetPath, fileInfo.getName());
@@ -224,17 +307,19 @@ public class DiskFileSystemDispatcher implements DiskFileSystem {
                     }
                     targetMatchResult.fileSystem.mkdir(targetUid, resolvedTargetPath, fileInfo.getName());
                 }
-                doCopy(uid, StringUtils.appendPath(source, sourceName), StringUtils.appendPath(target, targetName), targetUid, fileInfo.getName(), fileInfo.getName(), overwrite, ++depth);
+                doCopy(uid, StringUtils.appendPath(source, sourceName), StringUtils.appendPath(target, targetName), targetUid, fileInfo.getName(), fileInfo.getName(), overwrite, nextDepth);
             }
         }
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void copy(int uid, String source, String target, int targetUid, String sourceName, String targetName, Boolean overwrite) throws IOException {
         doCopy(uid, source, target, targetUid, sourceName, targetName, overwrite, 0);
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void move(int uid, String source, String target, String name, boolean overwrite) throws IOException {
         FileSystemMatchResult sourceMatchResult = matchFileSystem(uid, source);
         FileSystemMatchResult targetMatchResult = matchFileSystem(uid, target);
@@ -250,10 +335,13 @@ public class DiskFileSystemDispatcher implements DiskFileSystem {
     public List<FileInfo>[] getUserFileList(int uid, String path) throws IOException {
         FileSystemMatchResult matchResult = matchFileSystem(uid, path);
         List<FileInfo>[] res = matchResult.fileSystem.getUserFileList(uid, matchResult.resolvedPath);
+
+        // 若匹配到的文件系统不是主文件系统，则说明是挂载的文件系统，设置文件的mount属性为true
         if (!matchResult.fileSystem.equals(mainFileSystem)) {
             for (List<FileInfo> fileList : res) {
                 for (FileInfo fileInfo : fileList) {
                     fileInfo.setMount(true);
+                    fileInfo.setUid(uid);
                 }
             }
         }
@@ -276,38 +364,99 @@ public class DiskFileSystemDispatcher implements DiskFileSystem {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void moveToSaveFile(int uid, Path nativeFilePath, String path, FileInfo fileInfo) throws IOException {
         FileSystemMatchResult matchResult = matchFileSystem(uid, path);
         matchResult.fileSystem.moveToSaveFile(uid, nativeFilePath, matchResult.resolvedPath, fileInfo);
     }
 
     @Override
-    public int saveFile(int uid, InputStream stream, String path, FileInfo fileInfo) throws IOException {
+    @Transactional(rollbackFor = Exception.class)
+    public long saveFile(int uid, InputStream stream, String path, FileInfo fileInfo) throws IOException {
         FileSystemMatchResult matchResult = matchFileSystem(uid, path);
-        return matchResult.fileSystem.saveFile(uid, stream, path, fileInfo);
+        return matchResult.fileSystem.saveFile(uid, stream, matchResult.resolvedPath, fileInfo);
     }
 
     @Override
-    public int saveFile(int uid, MultipartFile file, String requestPath, String md5) throws IOException {
+    @Transactional(rollbackFor = Exception.class)
+    public long saveFile(int uid, MultipartFile file, String requestPath, String md5) throws IOException {
+        if(!FileNameValidator.valid(file.getName())) {
+            throw new IllegalArgumentException("非法文件名，不可包含/\\<>?|:换行符，回车符或文件名为..");
+        }
         FileSystemMatchResult matchResult = matchFileSystem(uid, requestPath);
         return matchResult.fileSystem.saveFile(uid, file, matchResult.resolvedPath, md5);
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void mkdir(int uid, String path, String name) throws IOException {
         FileSystemMatchResult matchResult = matchFileSystem(uid, path);
         matchResult.fileSystem.mkdir(uid, matchResult.resolvedPath, name);
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public long deleteFile(int uid, String path, List<String> name) throws IOException {
         FileSystemMatchResult matchResult = matchFileSystem(uid, path);
+        // 得到挂载完整路径 -> 挂载点 的map
+        Map<String, MountPoint> mountPointMap = mountPointService.findMountPointPathByUid(uid);
+        Set<Long> deleteMountId = new HashSet<>();
+        for (String n : name) {
+            String deletePath = StringUtils.appendPath(path, n);
+            List<Long> ids = mountPointMap.entrySet()
+                    .stream()
+                    .filter(e -> e.getKey().startsWith(deletePath))
+                    .map(e -> e.getValue().getId())
+                    .collect(Collectors.toList());
+
+            if (!ids.isEmpty()) {
+                deleteMountId.addAll(ids);
+            }
+        }
+        if (!deleteMountId.isEmpty()) {
+            log.info("{}:删除的路径中存在以下挂载点需要删除：{}", LOG_PREFIX, deleteMountId);
+            mountPointService.batchRemove(uid, deleteMountId);
+        }
+
         return matchResult.fileSystem.deleteFile(uid, matchResult.resolvedPath, name);
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void rename(int uid, String path, String name, String newName) throws IOException {
-        FileSystemMatchResult matchResult = matchFileSystem(uid, path);
-        matchResult.fileSystem.rename(uid, matchResult.resolvedPath, name, newName);
+        String originPath = StringUtils.appendPath(path, name);
+        FileSystemMatchResult matchResult = matchFileSystem(uid, originPath);
+        if (matchResult.isMountPath(originPath)) {
+            if(matchResult.fileSystem.exist(uid, StringUtils.appendPath(path, newName))) {
+                throw new JsonException(FileSystemError.FILE_EXIST);
+            }
+            try {
+                matchResult.mountPoint.setName(newName);
+                mountPointService.saveMountPoint(matchResult.mountPoint);
+            } catch (FileSystemParameterException e) {
+                e.printStackTrace();
+                throw new JsonException(e.getMessage());
+            }
+        } else {
+            matchResult = matchFileSystem(uid, path);
+            matchResult.fileSystem.rename(uid, matchResult.resolvedPath, name, newName);
+        }
+
+    }
+
+    @Override
+    public String toString() {
+        if (mainFileSystem == null) {
+            log.error("{}找不到主文件系统！请检查是否正确配置sys.store.type", LOG_PREFIX);
+            log.error("{}Could not find main filesystem! Please check whether sys.store.type is configured correctly", LOG_PREFIX);
+            throw new IllegalArgumentException("!!! Could not find main filesystem! Please check whether sys.store.type is configured correctly !!!");
+        } else {
+            return mainFileSystem.getClass().getSimpleName() + " - Proxy by DiskFileSystemDispatcher";
+        }
+    }
+
+    @Override
+    public List<FileSystemStatus> getStatus() {
+        return mainFileSystem.getStatus();
     }
 }

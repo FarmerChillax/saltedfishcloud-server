@@ -2,6 +2,7 @@ package com.xiaotao.saltedfishcloud.model.po;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.xiaotao.saltedfishcloud.utils.JwtUtils;
 import com.xiaotao.saltedfishcloud.utils.MapperHolder;
@@ -34,6 +35,10 @@ public class User implements UserDetails {
     private static final long serialVersionUID = -2530285292010387981L;
     public static final int TYPE_ADMIN = 1;
     public static final int TYPE_COMMON = 0;
+
+    /**
+     * 用户id，后续将改为Long类型
+     */
     private Integer id;
     @Username
     private String user;
@@ -44,6 +49,9 @@ public class User implements UserDetails {
     private Integer type = User.TYPE_COMMON;
     private int quota;
     private String email;
+
+    @JsonIgnore
+    private String token;
 
     private static final User PUBLIC_USER_INST;
 
@@ -102,6 +110,14 @@ public class User implements UserDetails {
     }
 
     /**
+     * 是否具备管理员权限
+     */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    public boolean isAdmin() {
+        return TYPE_ADMIN == this.type;
+    }
+
+    /**
      * 获取公共用户信息实例
      */
     public static User getPublicUser() {
@@ -109,7 +125,7 @@ public class User implements UserDetails {
     }
 
     @JsonIgnore
-    public String getToken() {
+    public String toToken() {
         try {
             String json = MapperHolder.mapper.writeValueAsString(this);
             return JwtUtils.generateToken(json);

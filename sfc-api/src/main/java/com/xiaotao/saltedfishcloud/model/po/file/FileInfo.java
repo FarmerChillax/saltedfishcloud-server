@@ -1,9 +1,8 @@
 package com.xiaotao.saltedfishcloud.model.po.file;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import lombok.experimental.Accessors;
 import org.springframework.core.io.InputStreamSource;
 import org.springframework.core.io.PathResource;
 import org.springframework.core.io.Resource;
@@ -19,6 +18,7 @@ import java.util.Date;
 @EqualsAndHashCode(callSuper = true)
 @Data
 @NoArgsConstructor
+@Accessors(chain = true)
 public class FileInfo extends BasicFileInfo{
     /**
      * 文件所属用户ID
@@ -40,6 +40,12 @@ public class FileInfo extends BasicFileInfo{
      * 是否为外部挂载的文件系统文件
      */
     private boolean isMount;
+
+    /**
+     * 挂载id
+     */
+    private Long mountId;
+
 
     @JsonIgnore
     private InputStreamSource streamSource;
@@ -75,8 +81,7 @@ public class FileInfo extends BasicFileInfo{
             fileInfo.streamSource = new PathResource(Paths.get(path));
             return fileInfo;
         } catch (IOException e) {
-            e.printStackTrace();
-            return null;
+            throw new RuntimeException(e);
         }
     }
 
@@ -109,6 +114,9 @@ public class FileInfo extends BasicFileInfo{
         this.path = path;
         this.lastModified = lastModified;
         this.streamSource = streamSource;
+        if (type == TYPE_DIR) {
+            this.size = -1;
+        }
     }
 
     /**

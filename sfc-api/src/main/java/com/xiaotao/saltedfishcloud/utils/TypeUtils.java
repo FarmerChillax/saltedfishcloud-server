@@ -14,10 +14,15 @@ public class TypeUtils {
     private static final Map<Class<?>, String> NUMBER_TYPE = new HashMap<>();
     static {
         NUMBER_TYPE.put(Integer.class, "int");
+        NUMBER_TYPE.put(Integer.TYPE, "int");
         NUMBER_TYPE.put(Long.class, "long");
+        NUMBER_TYPE.put(Long.TYPE, "long");
         NUMBER_TYPE.put(Short.class, "short");
+        NUMBER_TYPE.put(Short.TYPE, "short");
         NUMBER_TYPE.put(Double.class, "double");
+        NUMBER_TYPE.put(Double.TYPE, "double");
         NUMBER_TYPE.put(Float.class, "float");
+        NUMBER_TYPE.put(Float.TYPE, "float");
         NUMBER_TYPE.put(BigDecimal.class, "bigDecimal");
         NUMBER_TYPE.put(BigInteger.class, "bigInteger");
     }
@@ -38,7 +43,16 @@ public class TypeUtils {
      * @return      数字类型为true，否则为false
      */
     public static boolean isNumber(Class<?> type) {
-        return Number.class.isAssignableFrom(type);
+        return Number.class.isAssignableFrom(type) ||
+                Integer.TYPE.isAssignableFrom(type) ||
+                Long.TYPE.isAssignableFrom(type) ||
+                Double.TYPE.isAssignableFrom(type) ||
+                Float.TYPE.isAssignableFrom(type) ||
+                Short.TYPE.isAssignableFrom(type);
+    }
+
+    public static Long toLong(Object input) {
+        return toNumber(Long.class, input);
     }
 
     /**
@@ -104,7 +118,7 @@ public class TypeUtils {
      * @return      是boolean为true，否则false
      */
     public static boolean isBoolean(Class<?> type) {
-        return Boolean.class.isAssignableFrom(type);
+        return type == boolean.class || Boolean.class.isAssignableFrom(type);
     }
 
     /**
@@ -122,12 +136,15 @@ public class TypeUtils {
      * @return      boolean转换结果
      */
     public static Boolean toBoolean(Object obj) {
+        if (obj == null) {
+            return false;
+        }
         if (obj instanceof String) {
-            return ((String) obj).toLowerCase().equals("true");
+            return ((String) obj).equalsIgnoreCase("true");
         } else if (obj instanceof Number) {
             return ((Number) obj).intValue() >= 1;
         } else if (obj instanceof Boolean) {
-            return (Boolean)obj;
+            return (Boolean) obj;
         } else {
             throw new UnsupportedOperationException("无法将 " + obj.getClass() + " 转为boolean");
         }

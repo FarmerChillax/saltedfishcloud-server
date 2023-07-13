@@ -1,6 +1,8 @@
 package com.xiaotao.saltedfishcloud.service.user;
 
 import com.xiaotao.saltedfishcloud.exception.UserNoExistException;
+import com.xiaotao.saltedfishcloud.model.CommonPageInfo;
+import com.xiaotao.saltedfishcloud.model.param.PageableRequest;
 import com.xiaotao.saltedfishcloud.model.po.User;
 import com.xiaotao.saltedfishcloud.validator.annotations.Username;
 import org.springframework.validation.annotation.Validated;
@@ -8,9 +10,23 @@ import org.springframework.validation.annotation.Validated;
 import javax.mail.MessagingException;
 import javax.validation.Valid;
 import java.io.UnsupportedEncodingException;
+import java.util.Collection;
+import java.util.List;
 
 @Validated
 public interface UserService {
+
+
+
+    CommonPageInfo<User> listUsers(PageableRequest request);
+
+    /**
+     * 根据id批量查询用户的基本信息（仅包含用户名等基础数据）
+     * @param ids   用户id集合
+     * @return      查询结果
+     */
+    List<User> findBaseInfoByIds(Collection<Long> ids);
+
     /**
      * 通过账号标识字段获取用户
      * @param account   邮箱或用户名

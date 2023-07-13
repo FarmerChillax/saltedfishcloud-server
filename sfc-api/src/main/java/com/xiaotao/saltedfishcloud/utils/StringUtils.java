@@ -2,9 +2,14 @@ package com.xiaotao.saltedfishcloud.utils;
 
 import org.springframework.lang.Nullable;
 
-import java.net.MalformedURLException;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.URL;
+import java.util.Objects;
 import java.util.Random;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class StringUtils {
@@ -17,6 +22,40 @@ public class StringUtils {
      * 随机字符串采用的字符序列长度
      */
     private final static int PATTERN_LEN = PATTERN.length();
+
+    /**
+     * 判断a和b是否为相同表示的路径
+     */
+    public static boolean isPathEqual(String a, String b) {
+        boolean eq = Objects.equals(a, b);
+        if (eq) {
+            return eq;
+        }
+        if (a == null || b == null) {
+            return false;
+        }
+
+        a = a.replaceAll("//+", "/");
+        b = b.replaceAll("//+", "/");
+        return a.equals(b);
+
+
+    }
+
+    /**
+     * 从正则中匹配字符串
+     * @param str       待匹配字符串
+     * @param pattern   正则
+     * @return          返回匹配的字符串，不匹配则null
+     */
+    public static String matchStr(String str,Pattern pattern) {
+        Matcher matcher = pattern.matcher(str);
+        if (matcher.find()) {
+            return matcher.group();
+        } else {
+            return null;
+        }
+    }
 
     /**
      * 以文件路径形式追加字符串，自动处理/的重复问题。<br>
@@ -32,11 +71,44 @@ public class StringUtils {
         StringBuilder sb = new StringBuilder();
         String last = null;
         for (String data : appendData) {
-            if (data == null) continue;
+            if (data == null || (last != null && "/".equals(data))) continue;
 
             if (last != null && last.length() != 0) {
                 if (!(data.startsWith("/") || last.endsWith("/"))) {
                     sb.append('/');
+                } else if (data.startsWith("/") && last.equals("/")) {
+                    data = data.replaceAll("^/+", "");
+                }
+            }
+            sb.append(data);
+            last = data;
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 以文件路径形式追加字符串，自动处理/或\的重复问题。<br>
+     * 开头不会自动添加/或\，开头是否有/或\取决于参数0。
+     * 使用/还是\取决于操作系统
+     * @param appendData    要追加的各字符串，末尾和首部的/或\会被忽略，由函数内部自动管理/或\分割
+     * @return  追加后的路径字符串
+     */
+    public static String appendSystemPath(String...appendData) {
+        if (appendData.length == 2 && appendData[0] != null && appendData[0].length() == 0) {
+            return appendData[1];
+        }
+        String regex = "^" + File.separator + "+";
+
+        StringBuilder sb = new StringBuilder();
+        String last = null;
+        for (String data : appendData) {
+            if (data == null || (last != null && File.separator.equals(data))) continue;
+
+            if (last != null && last.length() != 0) {
+                if (!(data.startsWith(File.separator) || last.endsWith(File.separator))) {
+                    sb.append(File.separator);
+                } else if (data.startsWith(File.separator) && last.equals(File.separator)) {
+                    data = data.replaceAll(regex, "");
                 }
             }
             sb.append(data);
@@ -88,11 +160,19 @@ public class StringUtils {
     }
 
     public static String getURLLastName(String url) {
+        return getURLLastName(url, "/");
+    }
+
+    public static String getURLLastName(String url, String spec) {
         String path = url;
-        if (path.endsWith("/")) {
+        int qsIndex = path.indexOf("?");
+        if (qsIndex != -1) {
+            path = path.substring(0, qsIndex);
+        }
+        if (path.endsWith(spec)) {
             path = path.substring(0, path.length() -1);
         }
-        int i = path.lastIndexOf("/");
+        int i = path.lastIndexOf(spec);
         if (i == -1) {
             if (path.length() > 0) {
                 return path;
@@ -142,6 +222,21 @@ public class StringUtils {
     }
 
     /**
+     * 获取调用栈字符串文本消息
+     * @param throwable 抛出的对象
+     * @return          调用栈消息字符串文本
+     */
+    public static String getInvokeStackMsg(Throwable throwable) {
+
+        try (StringWriter stringWriter = new StringWriter(); PrintWriter printWriter = new PrintWriter(stringWriter)) {
+            throwable.printStackTrace(printWriter);
+            return stringWriter.toString();
+        } catch (IOException error) {
+            return "获取调用栈信息出错" + getInvokeStackMsg(error);
+        }
+    }
+
+    /**
      * 生成一个进度条字符串
      * @param loaded    已完成
      * @param total     总量
@@ -174,6 +269,44 @@ public class StringUtils {
         return input.substring(prefix.length());
     }
 
+    /**
+     * 解析驼峰命名为短横杠命名
+     * @param str   待转换字符串
+     */
+    public static String camelToKebab(String str) {
+        return parseCamelAndJoin(str, '-');
+    }
+
+    /**
+     * 驼峰命名转为下划线命名
+     * @param str   待转换字符串
+     */
+    public static String camelToUnder(String str) {
+        return parseCamelAndJoin(str, '_');
+    }
+
+    /**
+     * 解析驼峰命名，并将各单词转为小写后用参数连接
+     * @param str   待解析字符串
+     * @param ch    连接字符
+     * @return      处理结果
+     */
+    public static String parseCamelAndJoin(String str, char ch) {
+        int length = str.length();
+        StringBuilder sb = new StringBuilder(str.length() + 6);
+        for (int i = 0; i < length; i++) {
+            char c = str.charAt(i);
+            if (c < 'a') {
+                if (sb.length() != 0) {
+                    sb.append(ch);
+                }
+                sb.append((char)(c + 32));
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
 
     public static boolean hasText(@Nullable CharSequence str) {
         return str != null && str.length() > 0 && containsText(str);

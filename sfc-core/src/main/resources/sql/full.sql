@@ -122,6 +122,7 @@ CREATE TABLE `file_table` (
                               `md5` char(32) DEFAULT NULL,
                               `created_at` datetime NULL DEFAULT NULL,
                               `updated_at` datetime NULL DEFAULT NULL,
+                              `mount_id` bigint NULL COMMENT '挂载点id',
                               UNIQUE KEY `file_index` (`node`,`name`,`uid`),
                               KEY `md5_index` (`md5`),
                               KEY `uid_index` (`uid`)
@@ -142,6 +143,7 @@ CREATE TABLE `node_list` (
                              `uid` int unsigned DEFAULT NULL,
                              `collecting` tinyint(1) DEFAULT NULL COMMENT '该节点是否处于收集文件中',
                              `sharing` tinyint(1) DEFAULT NULL COMMENT '该节点是否处于分享状态',
+                             mount_id bigint COMMENT '挂载点id',
                              UNIQUE KEY `node_name_index` (`parent`,`name`),
                              KEY `id_index` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -195,7 +197,7 @@ DROP TABLE IF EXISTS `user`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `user` (
-                        `id` int unsigned NOT NULL AUTO_INCREMENT,
+                        `id` BIGINT NOT NULL AUTO_INCREMENT,
                         `user` varchar(32) DEFAULT NULL,
                         `pwd` varchar(32) DEFAULT NULL,
                         `email` varchar(256) DEFAULT NULL,
@@ -219,3 +221,58 @@ CREATE TABLE `user` (
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2021-12-25 16:16:14
+CREATE TABLE mount_point (
+                             id BIGINT NOT NULL PRIMARY KEY,
+                             uid BIGINT NOT NULL COMMENT '用户id',
+                             nid CHAR(32) COMMENT '挂载的节点id',
+                             name VARCHAR(100) COMMENT '挂载节点名称',
+                             protocol VARCHAR(32) COMMENT '挂载的文件系统协议',
+                             params TEXT COMMENT '挂载参数',
+                             create_at DATETIME COMMENT '创建日期',
+                             KEY `idx_uid`(uid, nid)
+)ENGINE=InnoDB CHARSET=utf8mb4 COMMENT '第三方文件系统挂载点';
+
+CREATE TABLE desktop_component_config (
+                                          id bigint primary key,
+                                          uid bigint COMMENT '使用的目标uid',
+                                          title VARCHAR(50) COMMENT '组件标题',
+                                          name VARCHAR(50) COMMENT '组件name',
+                                          params TEXT COMMENT '给组件设定的配置参数json',
+                                          type VARCHAR(50) DEFAULT 'vue' COMMENT '组件类型',
+                                          show_order int COMMENT '显示顺序，越小越靠前',
+                                          width int COMMENT '布局占用的单位宽度',
+                                          height int COMMENT '布局占用的单位高度',
+                                          remark text COMMENT '备注',
+                                          create_at DATETIME,
+                                          update_at DATETIME,
+                                          use_card int COMMENT '是否使用卡片样式',
+                                          enabled int COMMENT '是否启用',
+                                          key idx_name(name),
+                                          key idx_uid(uid)
+)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT '桌面小组件使用配置表';
+
+CREATE TABLE schedule_job_record
+(
+    id                BIGINT       NOT NULL,
+    uid               BIGINT       NULL,
+    create_at         datetime     NULL,
+    update_at         datetime     NULL,
+    job_name          VARCHAR(255) NOT NULL COMMENT '任务名称',
+    job_describe      VARCHAR(255) NULL COMMENT '任务描述',
+    last_execute_date BIGINT     NULL COMMENT '上次执行日期',
+    CONSTRAINT pk_schedulejobrecord PRIMARY KEY (id),
+    UNIQUE KEY idx_job_name(job_name)
+)COMMENT '定时任务记录' CHARSET=utf8mb4;
+
+CREATE TABLE comment (
+                         id bigint primary key,
+                         topic_id bigint COMMENT '话题id，可以是任意表的，0为系统留言板' NOT NULL,
+                         reply_id bigint COMMENT '回复id',
+                         uid bigint COMMENT '发送人用户id',
+                         ip char(48) COMMENT '发送时的ip地址',
+                         content text COMMENT '评论的内容',
+                         create_at DATETIME,
+                         update_at DATETIME,
+                         is_delete int,
+                         key idx_topic(topic_id)
+)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT '评论表';

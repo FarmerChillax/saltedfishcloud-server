@@ -1,10 +1,9 @@
 package com.xiaotao.saltedfishcloud.config;
 
-import com.xiaotao.saltedfishcloud.constant.MQTopic;
-import com.xiaotao.saltedfishcloud.enums.ProtectLevel;
-import com.xiaotao.saltedfishcloud.service.config.SysConfigName;
+import com.sfc.constant.MQTopic;
+import com.sfc.enums.ProtectLevel;
+import com.sfc.constant.SysConfigName;
 import com.xiaotao.saltedfishcloud.service.config.ConfigService;
-import com.xiaotao.saltedfishcloud.service.hello.HelloService;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,9 +27,6 @@ import java.util.Map;
 public class SysRuntimeConfig implements ApplicationRunner {
     private static ProtectLevel PROTECT_MODE_LEVEL = null;
     private static SysRuntimeConfig GLOBAL_HOLD_INST;
-
-    @Autowired
-    private HelloService helloService;
 
     @Autowired
     private ConfigService configService;
@@ -103,20 +99,14 @@ public class SysRuntimeConfig implements ApplicationRunner {
             log.warn("[注册关闭]系统未开启任何用户注册方式");
         }
 
-        updateFeature();
-        // 监听配置改变，实时更新状态缓存
-        configService.addConfigSetListener(e -> {
-            String key = e.getKey();
-            if (SysConfigName.Register.ENABLE_EMAIL_REG.equals(key)) {
-                enableEmailReg = "true".equalsIgnoreCase(e.getValue());
-            } else if (SysConfigName.Register.ENABLE_REG_CODE.equals(key)) {
-                enableRegCode = "true".equalsIgnoreCase(e.getValue());
-            }
-            updateFeature();
-        });
+        this.listenStoreTypeChange();
+    }
 
+    /**
+     * 监听分布式集群中触发保护级别切换信号
+     */
+    private void listenStoreTypeChange() {
 
-        // 监听分布式集群中触发保护级别切换信号
         redisMessageListenerContainer.addMessageListener((message, pattern) -> {
             ProtectLevel level = ProtectLevel.valueOf((String)redisTemplate.getValueSerializer().deserialize(message.getBody()));
             log.debug("[Runtime Config]因消息通知,系统保护级别切换为：{}", level);
@@ -124,10 +114,7 @@ public class SysRuntimeConfig implements ApplicationRunner {
         }, new PatternTopic(MQTopic.PROTECT_LEVEL_SWITCH));
     }
 
-    public void updateFeature() {
-        helloService.setFeature("enableRegCode", isEnableRegCode());
-        helloService.setFeature("enableEmailReg", isEnableEmailReg());
-    }
+
 
     /**
      * 从数据库中抓取数据更新配置

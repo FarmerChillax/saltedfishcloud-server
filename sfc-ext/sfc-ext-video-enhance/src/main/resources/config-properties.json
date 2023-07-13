@@ -1,0 +1,28 @@
+[
+  {
+    "name": "video-enhance",
+    "title": "基础配置",
+    "nodes": [
+      {
+        "nodes": [
+          {
+            "name": "ve.property",
+            "title": "配置",
+            "describe": "对插件依赖和相关功能进行配置",
+            "defaultValue": "{}",
+            "typeRef": "com.saltedfishcloud.ext.ve.model.VEProperty",
+            "inputType": "form"
+          },
+          {
+            "name": "ve.check",
+            "title": "检查配置",
+            "describe": "检查ffmpeg能否正常被调用",
+            "defaultValue": "{}",
+            "inputType": "template",
+            "template": "video-enhance-check"
+          }
+        ]
+      }
+    ]
+  }
+]

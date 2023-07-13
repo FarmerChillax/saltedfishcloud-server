@@ -1,28 +1,23 @@
 package com.xiaotao.saltedfishcloud.controller;
 
-import com.github.pagehelper.PageHelper;
-import com.github.pagehelper.PageInfo;
-import com.xiaotao.saltedfishcloud.config.SysRuntimeConfig;
 import com.xiaotao.saltedfishcloud.annotations.AllowAnonymous;
-import com.xiaotao.saltedfishcloud.constant.error.AccountError;
+import com.xiaotao.saltedfishcloud.config.SysRuntimeConfig;
 import com.xiaotao.saltedfishcloud.dao.mybatis.UserDao;
 import com.xiaotao.saltedfishcloud.dao.redis.TokenServiceImpl;
-import com.xiaotao.saltedfishcloud.model.json.JsonResult;
-import com.xiaotao.saltedfishcloud.model.json.JsonResultImpl;
-import com.xiaotao.saltedfishcloud.model.po.QuotaInfo;
-import com.xiaotao.saltedfishcloud.model.po.User;
 import com.xiaotao.saltedfishcloud.exception.JsonException;
 import com.xiaotao.saltedfishcloud.exception.UserNoExistException;
+import com.xiaotao.saltedfishcloud.model.CommonPageInfo;
+import com.xiaotao.saltedfishcloud.model.json.JsonResult;
+import com.xiaotao.saltedfishcloud.model.json.JsonResultImpl;
+import com.xiaotao.saltedfishcloud.model.param.PageableRequest;
+import com.xiaotao.saltedfishcloud.model.po.QuotaInfo;
+import com.xiaotao.saltedfishcloud.model.po.User;
 import com.xiaotao.saltedfishcloud.service.file.DiskFileSystemManager;
 import com.xiaotao.saltedfishcloud.service.user.UserService;
-import com.xiaotao.saltedfishcloud.utils.JwtUtils;
-import com.xiaotao.saltedfishcloud.utils.MultipartFileResource;
-import com.xiaotao.saltedfishcloud.utils.ResourceUtils;
-import com.xiaotao.saltedfishcloud.utils.SecureUtils;
+import com.xiaotao.saltedfishcloud.utils.*;
 import com.xiaotao.saltedfishcloud.validator.annotations.UID;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
-
 import org.hibernate.validator.constraints.Length;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
@@ -45,6 +40,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Controller
 @RequestMapping(UserController.PREFIX)
@@ -63,9 +59,15 @@ public class UserController {
     @ApiOperation("验证用户重置密码时输入的验证码是否正确")
     @PostMapping("/validResetPasswordEmailCode")
     @AllowAnonymous
-    public JsonResult validResetPasswordEmailCode(@RequestParam("account") String account,
+    public JsonResult<Boolean> validResetPasswordEmailCode(@RequestParam("account") String account,
                                                   @RequestParam("code") String code) {
         return JsonResultImpl.getInstance(userService.validResetPasswordEmailCode(account, code));
+    }
+
+    @PostMapping("findBaseUserInfo")
+    @AllowAnonymous
+    public JsonResult<List<User>> findBaseUserInfo(@RequestBody List<Long> ids) {
+        return JsonResultImpl.getInstance(userService.findBaseInfoByIds(ids));
     }
 
     /**
@@ -73,7 +75,7 @@ public class UserController {
      * @param kick 是否使旧token失效（踢下线）
      */
     @PostMapping("/updateToken")
-    public JsonResult updateToken(@RequestParam(value = "kick", defaultValue = "true") boolean kick) {
+    public JsonResult<String> updateToken(@RequestParam(value = "kick", defaultValue = "true") boolean kick) {
         final User user = userService.getUserById(SecureUtils.getSpringSecurityUser().getId());
         if (kick) {
             tokenDao.cleanUserToken(user.getId());
@@ -90,7 +92,7 @@ public class UserController {
      */
     @PostMapping("/resetPassword")
     @AllowAnonymous
-    public JsonResult resetPassword(@RequestParam("account") String account,
+    public JsonResult<?> resetPassword(@RequestParam("account") String account,
                                     @RequestParam("code") String code,
                                     @RequestParam("password") @Length(min = 6) String password) {
         userService.resetPassword(account, code, password);
@@ -104,7 +106,7 @@ public class UserController {
      * @param newCode  新邮箱验证码
      */
     @PostMapping("/newMail")
-    public JsonResult setEmail(@RequestParam("email") @Email String email,
+    public JsonResult<?> setEmail(@RequestParam("email") @Email String email,
                                @RequestParam(value = "originCode", required = false) String originCode,
                                @RequestParam("newCode") String newCode) {
         Integer uid = SecureUtils.getSpringSecurityUser().getId();
@@ -117,7 +119,7 @@ public class UserController {
      * @param email 新邮箱
      */
     @PostMapping("/sendBindEmail")
-    public JsonResult sendBindEmail(@RequestParam("email") @Email String email) throws MessagingException, UnsupportedEncodingException {
+    public JsonResult<?> sendBindEmail(@RequestParam("email") @Email String email) throws MessagingException, UnsupportedEncodingException {
         Integer uid = SecureUtils.getSpringSecurityUser().getId();
         userService.sendBindEmail(uid, email);
         return JsonResult.emptySuccess();
@@ -127,7 +129,7 @@ public class UserController {
      * 发送用于验证旧邮箱的邮箱验证码
      */
     @PostMapping("/sendVerifyEmail")
-    public JsonResult sendVerifyEmail() throws MessagingException, UnsupportedEncodingException {
+    public JsonResult<?> sendVerifyEmail() throws MessagingException, UnsupportedEncodingException {
         userService.sendVerifyEmail(SecureUtils.getSpringSecurityUser().getId());
         return JsonResult.emptySuccess();
     }
@@ -137,7 +139,7 @@ public class UserController {
      * @param code 验证码
      */
     @PostMapping("/verifyEmail")
-    public JsonResult verifyEmail(@RequestParam("code") String code) throws MessagingException, UnsupportedEncodingException {
+    public JsonResult<?> verifyEmail(@RequestParam("code") String code) throws MessagingException, UnsupportedEncodingException {
         userService.verifyEmail(SecureUtils.getSpringSecurityUser().getId(), code);
         return JsonResult.emptySuccess();
     }
@@ -147,7 +149,7 @@ public class UserController {
      */
     @PostMapping("/sendResetPasswordEmail")
     @AllowAnonymous
-    public JsonResult sendResetPasswordEmail(@RequestParam(value = "account") String account) throws MessagingException, UnsupportedEncodingException {
+    public JsonResult<?> sendResetPasswordEmail(@RequestParam(value = "account") String account) throws MessagingException, UnsupportedEncodingException {
         userService.sendResetPasswordEmail(account);
         return JsonResult.emptySuccess();
     }
@@ -157,7 +159,7 @@ public class UserController {
      */
     @GetMapping("/regType")
     @AllowAnonymous
-    public JsonResult getRegType() {
+    public JsonResult<?> getRegType() {
         return JsonResultImpl.getInstance(new HashMap<String, Boolean>(){{
             put("email", runtimeConfig.isEnableEmailReg());
             put("regcode", runtimeConfig.isEnableRegCode());
@@ -168,7 +170,7 @@ public class UserController {
      * 获取用户基本信息，并刷新token有效期
      */
     @GetMapping
-    public JsonResult getUserInfo(HttpServletRequest request) throws UserNoExistException {
+    public JsonResult<User> getUserInfo(HttpServletRequest request) throws UserNoExistException {
         User user = SecureUtils.getSpringSecurityUser();
         if (user == null) {
             throw new JsonException(401, "未登录");
@@ -184,7 +186,7 @@ public class UserController {
      */
     @PostMapping("/regcode")
     @AllowAnonymous
-    public JsonResult sendRegCode(@Validated @NotBlank @RequestParam("email") @Email String email) {
+    public JsonResult<?> sendRegCode(@Validated @NotBlank @RequestParam("email") @Email String email) {
         userService.sendRegEmail(email);
         return JsonResult.emptySuccess();
     }
@@ -197,7 +199,7 @@ public class UserController {
      */
     @PostMapping
     @AllowAnonymous
-    public JsonResult regUser(@RequestParam("user") String user,
+    public JsonResult<?> regUser(@RequestParam("user") String user,
                               @RequestParam("passwd") @Length(min = 6) String rawPassword,
                               @RequestParam(value = "regcode", defaultValue = "") String regCode,
                               @RequestParam("email") @Email String email,
@@ -221,7 +223,7 @@ public class UserController {
      * @param file  头像文件
      */
     @PostMapping("avatar")
-    public JsonResult uploadAvatar(@RequestParam("file") MultipartFile file) throws IOException {
+    public JsonResult<?> uploadAvatar(@RequestParam("file") MultipartFile file) throws IOException {
         fileSystemFactory.getMainFileSystem().saveAvatar(
                 SecureUtils.getSpringSecurityUser().getId(),
                 new MultipartFileResource(file)
@@ -239,29 +241,40 @@ public class UserController {
     })
     @AllowAnonymous
     public ResponseEntity<Resource>
-                getAvatar(HttpServletResponse response, @PathVariable(required = false) String username) throws IOException {
-        User currentUser = SecureUtils.getSpringSecurityUser();
-        if (currentUser == null && username == null) {
-            response.sendRedirect("/api/static/defaultAvatar.png");
-            return null;
-        }
-        if (username == null) {
-            return ResourceUtils.wrapResource(fileSystemFactory.getMainFileSystem().getAvatar(currentUser.getId()));
-        } else {
-            User user = userService.getUserByUser(username);
-            if (user == null) {
-                throw new JsonException(AccountError.USER_NOT_EXIST);
-            } else {
-                return ResourceUtils.wrapResource(fileSystemFactory.getMainFileSystem().getAvatar(user.getId()));
+                getAvatar(HttpServletResponse response,
+                          @RequestParam(required = false) Integer uid,
+                          @PathVariable(required = false) String username) throws IOException {
+        try {
+            User currentUser = SecureUtils.getSpringSecurityUser();
+            if (currentUser == null && username == null && uid == null) {
+                response.sendRedirect("/api/static/defaultAvatar.png");
+                return null;
             }
+            Integer finalUid = 0;
+
+            if (uid != null) {
+                finalUid = uid;
+            } else if (username != null) {
+                User user = userService.getUserByUser(username);
+                if (user != null) {
+                    finalUid = user.getId();
+                }
+            } else {
+                finalUid = currentUser.getId();
+            }
+            return ResourceUtils.wrapResource(fileSystemFactory.getMainFileSystem().getAvatar(finalUid));
+        } catch (Exception e) {
+            e.printStackTrace();
         }
+        response.sendRedirect("/api/static/defaultAvatar.png");
+        return null;
     }
 
     /**
      * 获取用户空间配额使用情况
      */
     @GetMapping("quota")
-    public JsonResult getQuotaUsed() {
+    public JsonResult<QuotaInfo> getQuotaUsed() {
         QuotaInfo used = userDao.getUserQuotaUsed(SecureUtils.getSpringSecurityUser().getId());
         return JsonResultImpl.getInstance(used);
     }
@@ -273,21 +286,21 @@ public class UserController {
      * @param force 管理员使用无视旧密码强制修改
      */
     @PostMapping("{uid}/passwd")
-    public JsonResult modifyPassword(@RequestParam("old") String oldPasswd,
+    public JsonResult<?> modifyPassword(@RequestParam("old") String oldPasswd,
                                      @RequestParam("new") @Length(min = 6) String newPasswd,
                                      @PathVariable("uid") @UID int uid,
                                      @RequestParam(value = "force", defaultValue = "false") boolean force) throws AccessDeniedException {
         User user = SecureUtils.getSpringSecurityUser();
         if (force) {
-            if ( user.getType() != User.TYPE_ADMIN) {
+            if (user == null || user.getType() != User.TYPE_ADMIN) {
                 throw new AccessDeniedException("非管理员不允许使用force参数");
             } else {
                 userDao.modifyPassword(uid, SecureUtils.getPassswd(newPasswd));
-                tokenDao.cleanUserToken(user.getId());
+                tokenDao.cleanUserToken(uid);
                 return JsonResultImpl.getInstance(200, null, "force reset");
             }
         } else {
-            tokenDao.cleanUserToken(user.getId());
+            tokenDao.cleanUserToken(uid);
             int i = userService.modifyPasswd(uid, oldPasswd, newPasswd);
             return JsonResultImpl.getInstance(200, i, "ok");
         }
@@ -300,9 +313,9 @@ public class UserController {
      */
     @PutMapping("{uid}/type/{typeCode}")
     @RolesAllowed({"ADMIN"})
-    public JsonResult grant(@PathVariable("uid") int uid,
+    public JsonResult<?> grant(@PathVariable("uid") int uid,
                             @PathVariable("typeCode") int type) {
-        User user = userDao.getUserById(uid);
+        User user = userService.getUserById(uid);
         if (user == null) {
             throw new UserNoExistException();
         }
@@ -317,13 +330,11 @@ public class UserController {
      */
     @GetMapping("list")
     @RolesAllowed({"ADMIN"})
-    public JsonResult getUserList(@RequestParam(value = "page", defaultValue = "1") int page,
-                                  @RequestParam(value = "size", defaultValue = "10") @Max(50) @Min(5) @Valid int size) {
-        PageHelper.startPage(page, 10);
-        List<User> userList = userDao.getUserList();
-        userList.forEach(e -> e.setPwd(null));
-        PageInfo<User> pageInfo = new PageInfo<>(userList);
-        return JsonResultImpl.getInstance(pageInfo);
+    public JsonResult<CommonPageInfo<User>> getUserList(@RequestParam(value = "page", defaultValue = "1") int page,
+                                  @RequestParam(value = "size", defaultValue = "10") @Max(500) @Min(5) @Valid int size) {
+        CommonPageInfo<User> res = userService.listUsers(new PageableRequest().setPage(page).setSize(size));
+        res.getContent().forEach(e -> e.setPwd(null));
+        return JsonResultImpl.getInstance(res);
     }
 
 }

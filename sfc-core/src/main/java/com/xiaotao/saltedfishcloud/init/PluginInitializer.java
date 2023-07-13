@@ -1,13 +1,9 @@
 package com.xiaotao.saltedfishcloud.init;
 
-import com.xiaotao.saltedfishcloud.ext.DefaultPluginManager;
-import com.xiaotao.saltedfishcloud.ext.DirPathClassLoader;
-import com.xiaotao.saltedfishcloud.ext.PluginManager;
-import com.xiaotao.saltedfishcloud.ext.PluginProperty;
+import com.xiaotao.saltedfishcloud.ext.*;
 import com.xiaotao.saltedfishcloud.model.ConfigNode;
 import com.xiaotao.saltedfishcloud.model.PluginInfo;
 import com.xiaotao.saltedfishcloud.utils.ExtUtils;
-import com.xiaotao.saltedfishcloud.utils.MapperHolder;
 import com.xiaotao.saltedfishcloud.utils.OSInfo;
 import com.xiaotao.saltedfishcloud.utils.PathUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -35,19 +31,35 @@ public class PluginInitializer implements ApplicationContextInitializer<Configur
         PluginManager pluginManager = new DefaultPluginManager(PluginInitializer.class.getClassLoader());
         context.setClassLoader(pluginManager.getJarMergeClassLoader());
         PluginProperty pluginProperty = PluginProperty.loadFromPropertyResolver(context.getEnvironment());
+
+        // 删除被标记的插件
         try {
+            pluginManager.deletePlugin();
+        } catch (IOException e) {
+            log.error("{}插件删除出错：", LOG_PREFIX, e);
+        }
+        try {
+            // 加载系统核心模块插件信息
             initBuildInPlugin(pluginManager);
+
+            // 执行插件升级替换
+            pluginManager.upgrade();
+
+            // 从classpath和ext目录中加载jar包插件
             initPluginFromClassPath(pluginManager);
+
+            // 从外部目录中加载非jar包形式的插件
             initPluginFromExtraResource(pluginManager, pluginProperty);
             context.addBeanFactoryPostProcessor(beanFactory -> {
-                beanFactory.registerResolvableDependency(PluginManager.class, pluginManager);
+                beanFactory.registerSingleton("pluginManager", pluginManager);
+//                beanFactory.registerResolvableDependency(PluginManager.class, pluginManager);
             });
             String pluginLists = "[" + String.join(",", pluginManager.getAllPlugin().keySet()) + "]";
             log.info("{}启动时加载的插件清单：{}",LOG_PREFIX, pluginLists);
             log.info("{}插件初始化耗时：{}s",LOG_PREFIX, (System.currentTimeMillis() - begin)/1000d);
         } catch (IOException e) {
-            e.printStackTrace();
-            throw new RuntimeException(e);
+            log.error("{}插件信息初始化失败", LOG_PREFIX, e);
+            throw new RuntimeException("插件信息初始化失败", e);
         }
     }
 
@@ -66,8 +78,9 @@ public class PluginInitializer implements ApplicationContextInitializer<Configur
 
             PathResource pathResource = new PathResource(path);
             log.info("{}从额外资源路径加载插件：{}",LOG_PREFIX, path);
-            DirPathClassLoader classLoader = new DirPathClassLoader(path);
-            pluginManager.register(pathResource, classLoader);
+
+//            DirPathClassLoader classLoader = new DirPathClassLoader(path, null);
+            pluginManager.register(pathResource, PluginClassLoaderFactory.createPurePluginClassLoader(path.toUri().toURL()));
         }
     }
 
@@ -77,8 +90,8 @@ public class PluginInitializer implements ApplicationContextInitializer<Configur
     public void initBuildInPlugin(PluginManager pluginManager) throws IOException {
         String buildInPath = "build-in-plugin";
         ClassLoader loader = PluginInitializer.class.getClassLoader();
-        PluginInfo pluginInfo = MapperHolder.parseJson(ExtUtils.getResourceText(loader, buildInPath + "/" + PluginManager.PLUGIN_INFO_FILE), PluginInfo.class);
-        List<ConfigNode> configNodes = MapperHolder.parseJsonToList(ExtUtils.getResourceText(loader, buildInPath + "/" + PluginManager.CONFIG_PROPERTIES_FILE), ConfigNode.class);
+        PluginInfo pluginInfo = ExtUtils.getPluginInfo(this.getClass().getClassLoader(), buildInPath);
+        List<ConfigNode> configNodes = ExtUtils.getPluginConfigNodeFromLoader(this.getClass().getClassLoader(), buildInPath);
         pluginManager.registerPluginResource("sys", pluginInfo, configNodes, buildInPath, loader);
     }
 
@@ -106,9 +119,9 @@ public class PluginInitializer implements ApplicationContextInitializer<Configur
                 // 处理jar包作为classpath发现的资源
                 String strUrl = url.toString();
                 String jarUrl;
-                int jarIndex = strUrl.indexOf("!/");
+                int jarIndex = strUrl.lastIndexOf("!/");
                 if (jarIndex != -1) {
-                    jarUrl = strUrl.substring(4, jarIndex);
+                    jarUrl = strUrl.substring(0, jarIndex);
                     log.info("{}加载classpath中的jar包插件：{}",LOG_PREFIX, jarUrl);
                     pluginManager.register(new UrlResource(jarUrl));
                 }

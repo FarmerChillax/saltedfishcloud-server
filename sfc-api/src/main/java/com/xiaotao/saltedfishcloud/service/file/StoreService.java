@@ -2,6 +2,7 @@ package com.xiaotao.saltedfishcloud.service.file;
 
 import com.xiaotao.saltedfishcloud.exception.JsonException;
 import com.xiaotao.saltedfishcloud.exception.UnableOverwriteException;
+import com.xiaotao.saltedfishcloud.model.FileSystemStatus;
 import com.xiaotao.saltedfishcloud.model.po.file.BasicFileInfo;
 import com.xiaotao.saltedfishcloud.model.po.file.FileInfo;
 import org.springframework.core.io.Resource;
@@ -18,6 +19,10 @@ import java.util.List;
  * 网盘文件存储服务，负责用户网盘文件物理数据的存取
  */
 public interface StoreService {
+    /**
+     * 获取存储系统状态，主要是存储空间相关大小
+     */
+    List<FileSystemStatus> getStatus();
     /**
      * 清空该存储系统所有的用户私人和公共网盘文件
      */
@@ -54,7 +59,6 @@ public interface StoreService {
 
     /**
      * 是否支持目录浏览，不支持则意味着lists方法永远返回空集合，同时也不支持记录同步机制
-     * @TODO 同步机制使用canBrowse判断能否同步
      * @return 支持为true，否则为false
      */
     boolean canBrowse();
@@ -83,13 +87,13 @@ public interface StoreService {
      * @param path  文件或目录路径
      * @return  存在为true，否则为false
      */
-    boolean exist(int uid, String path);
+    boolean exist(int uid, String path) throws IOException;
 
     /**
      * 通过文件移动的方式存储文件到网盘系统，相对于{@link #store}方法，避免了文件的重复写入操作。对本地文件操作后，原路径文件不再存在<br><br>
      * 如果是UNIQUE存储模式，则会先将文件移动到存储仓库（若仓库已存在文件则忽略该操作），随后再在目标网盘目录创建文件链接<br><br>
      * 如果是RAW存储模式，则会直接移动到目标位置。若本地文件路径与网盘路径对应的本地路径相同，操作将忽略。
-     * @TODO fileInfo改为filename
+     * todo fileInfo改为filename
      * @param uid           用户ID
      * @param nativePath    本地文件路径
      * @param diskPath      网盘路径

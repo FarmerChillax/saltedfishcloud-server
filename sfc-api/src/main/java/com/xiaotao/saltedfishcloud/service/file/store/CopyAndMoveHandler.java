@@ -1,6 +1,6 @@
 package com.xiaotao.saltedfishcloud.service.file.store;
 
-import com.xiaotao.saltedfishcloud.constant.error.FileSystemError;
+import com.sfc.constant.error.FileSystemError;
 import com.xiaotao.saltedfishcloud.model.po.file.FileInfo;
 import com.xiaotao.saltedfishcloud.exception.JsonException;
 import com.xiaotao.saltedfishcloud.utils.PathUtils;
@@ -25,6 +25,30 @@ public abstract class CopyAndMoveHandler {
      */
     public CopyAndMoveHandler(StoreReader reader) {
         this.reader = reader;
+    }
+
+    public static CopyAndMoveHandler createByStoreHandler(DirectRawStoreHandler handler) {
+        return new CopyAndMoveHandler(handler) {
+            @Override
+            protected boolean copyFile(String src, String dest) throws IOException {
+                return handler.copy(src, dest);
+            }
+
+            @Override
+            protected boolean moveFile(String src, String dest) throws IOException {
+                return handler.move(src, dest);
+            }
+
+            @Override
+            protected boolean isMoveWithRecursion() {
+                return true;
+            }
+
+            @Override
+            protected boolean mkdir(String path) throws IOException {
+                return handler.mkdir(path);
+            }
+        };
     }
 
     /**

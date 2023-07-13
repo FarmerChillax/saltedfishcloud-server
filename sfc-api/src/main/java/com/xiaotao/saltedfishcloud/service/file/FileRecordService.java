@@ -31,7 +31,7 @@ public interface FileRecordService {
      * @param dirPath   文件所在的目录路径
      * @param name      文件名
      */
-    FileInfo getFileInfo(int uid, String dirPath, String name) throws NoSuchFileException;
+    FileInfo getFileInfo(int uid, String dirPath, String name);
 
     /**
      * 通过MD5获取文件
@@ -80,6 +80,9 @@ public interface FileRecordService {
      */
     @Transactional(rollbackFor = Exception.class)
     int addRecord(int uid, String name, Long size, String md5, String path) throws NoSuchFileException;
+
+    @Transactional(rollbackFor = Exception.class)
+    int insert(FileInfo fileInfo);
 
     /**
      * 因文件被替换而更新一条记录
@@ -136,5 +139,5 @@ public interface FileRecordService {
      * @param newName 新文件名
      */
     @Transactional(rollbackFor = Exception.class)
-    void rename(int uid, String path, String oldName, String newName) throws NoSuchFileException, JsonProcessingException;
+    void rename(int uid, String path, String oldName, String newName) throws NoSuchFileException;
 }
