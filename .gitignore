@@ -22,6 +22,7 @@ target/
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
+/public/
 /dist/
 /nbdist/
 /.nb-gradle/
@@ -39,3 +40,6 @@ sfc-web/src/main/resources/application.yml
 /release
 /release/*
 /ext
+
+log/**
+.log

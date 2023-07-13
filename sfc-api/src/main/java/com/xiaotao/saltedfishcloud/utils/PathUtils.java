@@ -1,15 +1,70 @@
 package com.xiaotao.saltedfishcloud.utils;
 
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
 public class PathUtils {
+
+    private static final Path LOG_PATH;
+    private static final Path TEMP_PATH;
+    private static final String TEMP_PATH_STR;
+
+    static {
+        LOG_PATH = Paths.get("log");
+        if (!Files.exists(LOG_PATH)) {
+            try {
+                Files.createDirectories(LOG_PATH);
+            } catch (IOException e) {
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+        }
+
+        TEMP_PATH = Paths.get(StringUtils.appendPath(System.getProperty("java.io.tmpdir"), "xyy"));
+        if (!Files.exists(TEMP_PATH)) {
+            try {
+                Files.createDirectories(TEMP_PATH);
+            } catch (IOException e) {
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+        }
+        TEMP_PATH_STR = TEMP_PATH.toString();
+    }
+
     /**
      * 获取系统临时目录
      */
     public static String getTempDirectory() {
-        return System.getProperty("java.io.tmpdir");
+        return TEMP_PATH_STR;
+    }
+
+    public static Path getTempPath() {
+        return TEMP_PATH;
+    }
+
+    /**
+     * 获取在临时目录下的二级目录，若二级目录不存在则创建
+     * @param path 二级目录
+     */
+    public static Path getAndCreateTempDirPath(String path) throws IOException {
+        Path res = getTempPath().resolve(path);
+        if (Files.notExists(res)) {
+            Files.createDirectories(res);
+        }
+        return res;
+    }
+
+    /**
+     * 获取日志目录
+     */
+    public static Path getLogDirectory() {
+        return LOG_PATH;
     }
 
     /**

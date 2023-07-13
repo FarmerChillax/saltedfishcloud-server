@@ -1,20 +1,19 @@
 package com.xiaotao.saltedfishcloud.service.file.impl.filesystem;
 
+import com.sfc.constant.error.FileSystemError;
 import com.xiaotao.saltedfishcloud.config.SysProperties;
-import com.xiaotao.saltedfishcloud.constant.error.FileSystemError;
-import com.xiaotao.saltedfishcloud.enums.ArchiveType;
 import com.xiaotao.saltedfishcloud.exception.FileSystemParameterException;
 import com.xiaotao.saltedfishcloud.exception.JsonException;
 import com.xiaotao.saltedfishcloud.model.FileSystemStatus;
 import com.xiaotao.saltedfishcloud.model.po.MountPoint;
 import com.xiaotao.saltedfishcloud.model.po.file.BasicFileInfo;
 import com.xiaotao.saltedfishcloud.model.po.file.FileInfo;
-import com.xiaotao.saltedfishcloud.service.file.AbstractDiskFileSystem;
 import com.xiaotao.saltedfishcloud.service.file.DiskFileSystem;
 import com.xiaotao.saltedfishcloud.service.file.DiskFileSystemManager;
 import com.xiaotao.saltedfishcloud.service.mountpoint.MountPointService;
 import com.xiaotao.saltedfishcloud.utils.MapperHolder;
 import com.xiaotao.saltedfishcloud.utils.StringUtils;
+import com.xiaotao.saltedfishcloud.validator.FileNameValidator;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
@@ -26,7 +25,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -80,7 +78,7 @@ class FileSystemMatchResult {
  */
 @Slf4j
 @Component
-public class DiskFileSystemDispatcher extends AbstractDiskFileSystem implements DiskFileSystem {
+public class DiskFileSystemDispatcher implements DiskFileSystem {
     private final static String LOG_PREFIX = "[FileSystemDispatcher]";
 
     @Getter
@@ -98,15 +96,6 @@ public class DiskFileSystemDispatcher extends AbstractDiskFileSystem implements 
     @Autowired
     private SysProperties sysProperties;
 
-    @Override
-    protected RedissonClient getRedissonClient() {
-        return redisson;
-    }
-
-    @Override
-    protected SysProperties getSysProperties() {
-        return sysProperties;
-    }
 
     public void setMainFileSystem(DiskFileSystem mainFileSystem) {
         if (this.mainFileSystem != null) {
@@ -385,12 +374,15 @@ public class DiskFileSystemDispatcher extends AbstractDiskFileSystem implements 
     @Transactional(rollbackFor = Exception.class)
     public long saveFile(int uid, InputStream stream, String path, FileInfo fileInfo) throws IOException {
         FileSystemMatchResult matchResult = matchFileSystem(uid, path);
-        return matchResult.fileSystem.saveFile(uid, stream, path, fileInfo);
+        return matchResult.fileSystem.saveFile(uid, stream, matchResult.resolvedPath, fileInfo);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public long saveFile(int uid, MultipartFile file, String requestPath, String md5) throws IOException {
+        if(!FileNameValidator.valid(file.getName())) {
+            throw new IllegalArgumentException("非法文件名，不可包含/\\<>?|:换行符，回车符或文件名为..");
+        }
         FileSystemMatchResult matchResult = matchFileSystem(uid, requestPath);
         return matchResult.fileSystem.saveFile(uid, file, matchResult.resolvedPath, md5);
     }

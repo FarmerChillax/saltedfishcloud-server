@@ -11,7 +11,8 @@
 
     <properties>
         <java.version>11</java.version>
-        <api.version>2.2.0</api.version>
+        <api.version>2.6.4</api.version>
+        <task.version>1.0.0</task.version>
         <skipTests>true</skipTests>
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
@@ -28,6 +29,10 @@
         <module>sfc-ext-ftp-store</module>
         <module>sfc-ext-ftp-server</module>
         <module>sfc-ext-video-enhance</module>
+        <module>sfc-ext-jntm</module>
+        <module>sfc-ext-quick-share</module>
+        <module>sfc-ext-network-tools</module>
+        <module>sfc-ext-web-shell</module>
     </modules>
 
 
@@ -35,6 +40,12 @@
         <dependency>
             <groupId>com.xiaotao</groupId>
             <artifactId>sfc-api</artifactId>
+            <version>${api.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.xiaotao</groupId>
+            <artifactId>sfc-common</artifactId>
             <version>${api.version}</version>
             <scope>provided</scope>
         </dependency>
@@ -67,6 +78,12 @@
             <artifactId>junit-jupiter</artifactId>
             <version>5.8.1</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context-indexer</artifactId>
+            <version>5.3.1</version>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
 

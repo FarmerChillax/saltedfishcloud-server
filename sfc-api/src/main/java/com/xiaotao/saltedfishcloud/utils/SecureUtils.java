@@ -1,7 +1,9 @@
 package com.xiaotao.saltedfishcloud.utils;
 
 import com.xiaotao.saltedfishcloud.model.po.User;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.util.DigestUtils;
 
 import java.util.UUID;
@@ -49,6 +51,17 @@ public class SecureUtils {
         } catch (Exception e) {
             return null;
         }
+    }
+
+
+    /**
+     * 将指定的用户对象作为当前操作用户绑定到当前线程上下文
+     * @param user  用户
+     */
+    static public void bindUser(User user) {
+        SecurityContextHolder.setContext(new SecurityContextImpl(
+                new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities())
+        ));
     }
 
 }
